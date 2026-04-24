@@ -31,6 +31,83 @@ class TwentyCRMServer {
     this.setupToolHandlers();
   }
 
+  // Twenty's REST API uses composite fields (name, emails, phones, linkedinLink,
+  // xLink, address, domainName). The MCP wrapper exposes flat params for
+  // ergonomics, so we remap before sending. Pass-through any field that's
+  // already in composite shape.
+  _personPayload(data) {
+    const {
+      id, firstName, lastName, email, phone, linkedinUrl,
+      ...passthrough
+    } = data;
+    const payload = { ...passthrough };
+    if (firstName !== undefined || lastName !== undefined) {
+      payload.name = {
+        firstName: firstName ?? "",
+        lastName: lastName ?? "",
+      };
+    }
+    if (email !== undefined) {
+      payload.emails = { primaryEmail: email, additionalEmails: [] };
+    }
+    if (phone !== undefined) {
+      payload.phones = {
+        primaryPhoneNumber: phone,
+        primaryPhoneCountryCode: "",
+        primaryPhoneCallingCode: "",
+        additionalPhones: [],
+      };
+    }
+    if (linkedinUrl !== undefined) {
+      payload.linkedinLink = {
+        primaryLinkUrl: linkedinUrl,
+        primaryLinkLabel: "",
+        secondaryLinks: [],
+      };
+    }
+    return payload;
+  }
+
+  _companyPayload(data) {
+    const {
+      id, domainName, address, linkedinUrl, xUrl,
+      ...passthrough
+    } = data;
+    const payload = { ...passthrough };
+    if (domainName !== undefined) {
+      payload.domainName = typeof domainName === "string"
+        ? { primaryLinkUrl: domainName, primaryLinkLabel: "", secondaryLinks: [] }
+        : domainName;
+    }
+    if (address !== undefined) {
+      payload.address = typeof address === "string"
+        ? {
+            addressStreet1: address,
+            addressStreet2: "",
+            addressCity: "",
+            addressPostcode: "",
+            addressState: "",
+            addressCountry: "",
+          }
+        : address;
+    }
+    if (linkedinUrl !== undefined) {
+      payload.linkedinLink = {
+        primaryLinkUrl: linkedinUrl,
+        primaryLinkLabel: "",
+        secondaryLinks: [],
+      };
+    }
+    if (xUrl !== undefined) {
+      payload.xLink = {
+        primaryLinkUrl: xUrl,
+        primaryLinkLabel: "",
+        secondaryLinks: [],
+      };
+    }
+    return payload;
+  }
+
   async makeRequest(endpoint, method = "GET", data = null) {
     const url = `${this.baseUrl}${endpoint}`;
     const options = {
@@ -466,7 +543,7 @@ class TwentyCRMServer {
 
   // People methods
   async createPerson(data) {
-    const result = await this.makeRequest("/rest/people", "POST", data);
+    const result = await this.makeRequest("/rest/people", "POST", this._personPayload(data));
     return {
       content: [
         {
@@ -490,8 +567,8 @@ class TwentyCRMServer {
   }
 
   async updatePerson(data) {
-    const { id, ...updateData } = data;
-    const result = await this.makeRequest(`/rest/people/${id}`, "PUT", updateData);
+    const { id } = data;
+    const result = await this.makeRequest(`/rest/people/${id}`, "PATCH", this._personPayload(data));
     return {
       content: [
         {
@@ -538,7 +615,7 @@ class TwentyCRMServer {
 
   // Company methods
   async createCompany(data) {
-    const result = await this.makeRequest("/rest/companies", "POST", data);
+    const result = await this.makeRequest("/rest/companies", "POST", this._companyPayload(data));
     return {
       content: [
         {
@@ -562,8 +639,8 @@ class TwentyCRMServer {
   }
 
   async updateCompany(data) {
-    const { id, ...updateData } = data;
-    const result = await this.makeRequest(`/rest/companies/${id}`, "PUT", updateData);
+    const { id } = data;
+    const result = await this.makeRequest(`/rest/companies/${id}`, "PATCH", this._companyPayload(data));
     return {
       content: [
         {
