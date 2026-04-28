@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/mhenry3164-twenty-crm-mcp-server-badge.png)](https://mseep.ai/app/mhenry3164-twenty-crm-mcp-server)
+
 <div align="center">
 
 # 🤖 Twenty CRM MCP Server
