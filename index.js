@@ -502,13 +502,31 @@ class TwentyCRMServer {
     };
   }
 
+  // Twenty's REST API has no `search` param — only `filter` with comparators
+  // like [ilike]. Build an OR-grouped ilike filter across the given fields.
+  buildSearchFilter(search, fields) {
+    if (!search) return "";
+    const safe = String(search).replace(/[%(),\\]/g, " ").trim();
+    if (!safe) return "";
+    const value = encodeURIComponent(`%${safe}%`);
+    const clauses = fields.map(f => `${f}[ilike]:${value}`).join(",");
+    const filter = fields.length === 1 ? clauses : `or(${clauses})`;
+    const encoded = filter
+      .replace(/\[/g, "%5B")
+      .replace(/\]/g, "%5D")
+      .replace(/:/g, "%3A");
+    return `&filter=${encoded}`;
+  }
+
   async listPeople(params = {}) {
     const { limit = 20, offset = 0, search, companyId } = params;
     let endpoint = `/rest/people?limit=${limit}&offset=${offset}`;
-    
-    if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
-    }
+
+    endpoint += this.buildSearchFilter(search, [
+      "name.firstName",
+      "name.lastName",
+      "emails.primaryEmail",
+    ]);
     if (companyId) {
       endpoint += `&companyId=${companyId}`;
     }
@@ -577,10 +595,8 @@ class TwentyCRMServer {
   async listCompanies(params = {}) {
     const { limit = 20, offset = 0, search } = params;
     let endpoint = `/rest/companies?limit=${limit}&offset=${offset}`;
-    
-    if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
-    }
+
+    endpoint += this.buildSearchFilter(search, ["name"]);
 
     const result = await this.makeRequest(endpoint);
     return {
@@ -633,10 +649,8 @@ class TwentyCRMServer {
   async listNotes(params = {}) {
     const { limit = 20, offset = 0, search } = params;
     let endpoint = `/rest/notes?limit=${limit}&offset=${offset}`;
-    
-    if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
-    }
+
+    endpoint += this.buildSearchFilter(search, ["title"]);
 
     const result = await this.makeRequest(endpoint);
     return {
@@ -775,10 +789,17 @@ class TwentyCRMServer {
   async searchRecords(params) {
     const { query, objectTypes = ['people', 'companies'], limit = 10 } = params;
     const results = {};
+    const fieldMap = {
+      people: ["name.firstName", "name.lastName", "emails.primaryEmail"],
+      companies: ["name"],
+      notes: ["title"],
+    };
 
     for (const objectType of objectTypes) {
       try {
-        const endpoint = `/rest/${objectType}?search=${encodeURIComponent(query)}&limit=${limit}`;
+        const fields = fieldMap[objectType] || ["name"];
+        const filterPart = this.buildSearchFilter(query, fields);
+        const endpoint = `/rest/${objectType}?limit=${limit}${filterPart}`;
         results[objectType] = await this.makeRequest(endpoint);
       } catch (error) {
         results[objectType] = { error: error.message };
