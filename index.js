@@ -380,6 +380,77 @@ class TwentyCRMServer {
               },
               required: ["query"]
             }
+          },
+
+          // Opportunity Management
+          {
+            name: "create_opportunity",
+            description: "Create a new opportunity in Twenty CRM",
+            inputSchema: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Opportunity name" },
+                stage: { type: "string", description: "Stage: NEW, SCREENING, MEETING, PROPOSAL, or CUSTOMER" },
+                amount: { type: "number", description: "Amount in main currency units (e.g. euros), converted to micros automatically" },
+                currencyCode: { type: "string", description: "ISO currency code (default: EUR)" },
+                closeDate: { type: "string", description: "Close date in ISO 8601 format (e.g. 2026-03-15)" },
+                companyId: { type: "string", description: "Related company ID" },
+                pointOfContactId: { type: "string", description: "Related person ID (point of contact)" }
+              },
+              required: ["name"]
+            }
+          },
+          {
+            name: "get_opportunity",
+            description: "Get details of a specific opportunity by ID",
+            inputSchema: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "Opportunity ID" }
+              },
+              required: ["id"]
+            }
+          },
+          {
+            name: "list_opportunities",
+            description: "List opportunities with optional filtering and pagination",
+            inputSchema: {
+              type: "object",
+              properties: {
+                limit: { type: "number", description: "Number of results to return (default: 20)" },
+                offset: { type: "number", description: "Number of results to skip (default: 0)" },
+                search: { type: "string", description: "Search term for opportunity name" }
+              }
+            }
+          },
+          {
+            name: "update_opportunity",
+            description: "Update an existing opportunity",
+            inputSchema: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "Opportunity ID" },
+                name: { type: "string", description: "Opportunity name" },
+                stage: { type: "string", description: "Stage: NEW, SCREENING, MEETING, PROPOSAL, or CUSTOMER" },
+                amount: { type: "number", description: "Amount in main currency units (e.g. euros)" },
+                currencyCode: { type: "string", description: "ISO currency code (default: EUR)" },
+                closeDate: { type: "string", description: "Close date in ISO 8601 format" },
+                companyId: { type: "string", description: "Related company ID" },
+                pointOfContactId: { type: "string", description: "Related person ID" }
+              },
+              required: ["id"]
+            }
+          },
+          {
+            name: "delete_opportunity",
+            description: "Delete an opportunity from Twenty CRM",
+            inputSchema: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "Opportunity ID to delete" }
+              },
+              required: ["id"]
+            }
           }
         ]
       };
@@ -447,6 +518,18 @@ class TwentyCRMServer {
           // Search operations
           case "search_records":
             return await this.searchRecords(args);
+
+          // Opportunity operations
+          case "create_opportunity":
+            return await this.createOpportunity(args);
+          case "get_opportunity":
+            return await this.getOpportunity(args.id);
+          case "list_opportunities":
+            return await this.listOpportunities(args);
+          case "update_opportunity":
+            return await this.updateOpportunity(args);
+          case "delete_opportunity":
+            return await this.deleteOpportunity(args.id);
 
           default:
             throw new Error(`Unknown tool: ${name}`);
@@ -537,6 +620,87 @@ class TwentyCRMServer {
   }
 
   // Company methods
+  // Opportunity methods
+  buildOpportunityPayload(data) {
+    const { id, amount, currencyCode, ...rest } = data;
+    const payload = { ...rest };
+    if (amount !== undefined && amount !== null) {
+      payload.amount = {
+        amountMicros: Math.round(Number(amount) * 1000000),
+        currencyCode: currencyCode || "EUR",
+      };
+    }
+    return payload;
+  }
+
+  async createOpportunity(data) {
+    const payload = this.buildOpportunityPayload(data);
+    const result = await this.makeRequest("/rest/opportunities", "POST", payload);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Created opportunity: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async getOpportunity(id) {
+    const result = await this.makeRequest(`/rest/opportunities/${id}`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Opportunity details: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async listOpportunities(params = {}) {
+    const { limit = 20, offset = 0, search } = params;
+    let endpoint = `/rest/opportunities?limit=${limit}&offset=${offset}`;
+    if (search) {
+      endpoint += `&search=${encodeURIComponent(search)}`;
+    }
+    const result = await this.makeRequest(endpoint);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Opportunities list: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async updateOpportunity(data) {
+    const { id } = data;
+    const payload = this.buildOpportunityPayload(data);
+    const result = await this.makeRequest(`/rest/opportunities/${id}`, "PATCH", payload);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Updated opportunity: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async deleteOpportunity(id) {
+    await this.makeRequest(`/rest/opportunities/${id}`, "DELETE");
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Deleted opportunity ${id}`
+        }
+      ]
+    };
+  }
+
   async createCompany(data) {
     const result = await this.makeRequest("/rest/companies", "POST", data);
     return {
