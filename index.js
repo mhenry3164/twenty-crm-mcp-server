@@ -7,6 +7,38 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+// Twenty REST filter grammar: filter=field[comparator]:value , comma = AND, or(...) = OR.
+// ponytail: operator spellings (ilike/gte/eq) per Twenty docs; confirm against your
+// workspace playground (Settings → API & Webhooks) if a query 400s.
+const SEARCH_FIELDS = {
+  people: ["name.firstName", "name.lastName", "emails.primaryEmail"],
+  companies: ["name", "domainName.primaryLinkUrl"],
+  notes: ["title"],
+  tasks: ["title"],
+};
+
+// term -> ilike OR-clause across an object's text fields. Wraps in or(...) only when >1 field.
+function searchToFilter(term, fields) {
+  const clauses = fields.map((f) => `${f}[ilike]:%${term}%`);
+  return clauses.length > 1 ? `or(${clauses.join(",")})` : clauses[0];
+}
+
+// Assemble the query string. searchFilter/extra are AND-joined with the caller's raw filter.
+// Twenty REST is cursor-paginated (starting_after/ending_before), NOT offset. Query keys are
+// snake_case: order_by, starting_after, ending_before. Page forward by passing the previous
+// response's pageInfo.endCursor as startingAfter.
+// ponytail: whole filter is URL-encoded, so a comma *inside* a value would misparse — search
+// terms rarely contain commas; use the raw `filter` param for anything exotic.
+function buildQuery({ limit = 20, startingAfter, endingBefore, filter, orderBy } = {}, ...andParts) {
+  const parts = [`limit=${limit}`];
+  const filters = [...andParts, filter].filter(Boolean);
+  if (filters.length) parts.push(`filter=${encodeURIComponent(filters.join(","))}`);
+  if (orderBy) parts.push(`order_by=${encodeURIComponent(orderBy)}`);
+  if (startingAfter) parts.push(`starting_after=${encodeURIComponent(startingAfter)}`);
+  if (endingBefore) parts.push(`ending_before=${encodeURIComponent(endingBefore)}`);
+  return parts.join("&");
+}
+
 class TwentyCRMServer {
   constructor() {
     this.server = new Server(
@@ -121,9 +153,12 @@ class TwentyCRMServer {
               type: "object",
               properties: {
                 limit: { type: "number", description: "Number of results to return (default: 20)" },
-                offset: { type: "number", description: "Number of results to skip (default: 0)" },
-                search: { type: "string", description: "Search term for name or email" },
-                companyId: { type: "string", description: "Filter by company ID" }
+                startingAfter: { type: "string", description: "Cursor for forward pagination: pass the previous response's pageInfo.endCursor" },
+                endingBefore: { type: "string", description: "Cursor for backward pagination: pass pageInfo.startCursor" },
+                search: { type: "string", description: "Search term for name or email (ilike)" },
+                companyId: { type: "string", description: "Filter by company ID" },
+                filter: { type: "string", description: "Raw Twenty filter, e.g. 'createdAt[gte]:2026-01-01'. Grammar: field[comparator]:value, comma=AND, or(...)=OR" },
+                orderBy: { type: "string", description: "e.g. 'createdAt[DescNullsLast]'" }
               }
             }
           },
@@ -193,8 +228,11 @@ class TwentyCRMServer {
               type: "object",
               properties: {
                 limit: { type: "number", description: "Number of results to return (default: 20)" },
-                offset: { type: "number", description: "Number of results to skip (default: 0)" },
-                search: { type: "string", description: "Search term for company name" }
+                startingAfter: { type: "string", description: "Cursor for forward pagination: pass the previous response's pageInfo.endCursor" },
+                endingBefore: { type: "string", description: "Cursor for backward pagination: pass pageInfo.startCursor" },
+                search: { type: "string", description: "Search term for company name (ilike)" },
+                filter: { type: "string", description: "Raw Twenty filter, e.g. 'createdAt[gte]:2026-01-01'. Grammar: field[comparator]:value, comma=AND, or(...)=OR" },
+                orderBy: { type: "string", description: "e.g. 'createdAt[DescNullsLast]'" }
               }
             }
           },
@@ -242,8 +280,11 @@ class TwentyCRMServer {
               type: "object",
               properties: {
                 limit: { type: "number", description: "Number of results to return (default: 20)" },
-                offset: { type: "number", description: "Number of results to skip (default: 0)" },
-                search: { type: "string", description: "Search term for note title or content" }
+                startingAfter: { type: "string", description: "Cursor for forward pagination: pass the previous response's pageInfo.endCursor" },
+                endingBefore: { type: "string", description: "Cursor for backward pagination: pass pageInfo.startCursor" },
+                search: { type: "string", description: "Search term for note title (ilike)" },
+                filter: { type: "string", description: "Raw Twenty filter, e.g. 'createdAt[gte]:2026-01-01'. Grammar: field[comparator]:value, comma=AND, or(...)=OR" },
+                orderBy: { type: "string", description: "e.g. 'createdAt[DescNullsLast]'" }
               }
             }
           },
@@ -308,9 +349,12 @@ class TwentyCRMServer {
               type: "object",
               properties: {
                 limit: { type: "number", description: "Number of results to return (default: 20)" },
-                offset: { type: "number", description: "Number of results to skip (default: 0)" },
+                startingAfter: { type: "string", description: "Cursor for forward pagination: pass the previous response's pageInfo.endCursor" },
+                endingBefore: { type: "string", description: "Cursor for backward pagination: pass pageInfo.startCursor" },
                 status: { type: "string", description: "Filter by status", enum: ["TODO", "IN_PROGRESS", "DONE"] },
-                assigneeId: { type: "string", description: "Filter by assignee ID" }
+                assigneeId: { type: "string", description: "Filter by assignee ID" },
+                filter: { type: "string", description: "Raw Twenty filter, e.g. 'dueAt[lte]:2026-07-31'. Grammar: field[comparator]:value, comma=AND, or(...)=OR" },
+                orderBy: { type: "string", description: "e.g. 'dueAt[AscNullsLast]'" }
               }
             }
           },
@@ -503,15 +547,12 @@ class TwentyCRMServer {
   }
 
   async listPeople(params = {}) {
-    const { limit = 20, offset = 0, search, companyId } = params;
-    let endpoint = `/rest/people?limit=${limit}&offset=${offset}`;
-    
-    if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
-    }
-    if (companyId) {
-      endpoint += `&companyId=${companyId}`;
-    }
+    const { search, companyId } = params;
+    const endpoint = `/rest/people?${buildQuery(
+      params,
+      search && searchToFilter(search, SEARCH_FIELDS.people),
+      companyId && `companyId[eq]:${companyId}`
+    )}`;
 
     const result = await this.makeRequest(endpoint);
     return {
@@ -575,12 +616,11 @@ class TwentyCRMServer {
   }
 
   async listCompanies(params = {}) {
-    const { limit = 20, offset = 0, search } = params;
-    let endpoint = `/rest/companies?limit=${limit}&offset=${offset}`;
-    
-    if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
-    }
+    const { search } = params;
+    const endpoint = `/rest/companies?${buildQuery(
+      params,
+      search && searchToFilter(search, SEARCH_FIELDS.companies)
+    )}`;
 
     const result = await this.makeRequest(endpoint);
     return {
@@ -631,12 +671,11 @@ class TwentyCRMServer {
   }
 
   async listNotes(params = {}) {
-    const { limit = 20, offset = 0, search } = params;
-    let endpoint = `/rest/notes?limit=${limit}&offset=${offset}`;
-    
-    if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
-    }
+    const { search } = params;
+    const endpoint = `/rest/notes?${buildQuery(
+      params,
+      search && searchToFilter(search, SEARCH_FIELDS.notes)
+    )}`;
 
     const result = await this.makeRequest(endpoint);
     return {
@@ -700,15 +739,12 @@ class TwentyCRMServer {
   }
 
   async listTasks(params = {}) {
-    const { limit = 20, offset = 0, status, assigneeId } = params;
-    let endpoint = `/rest/tasks?limit=${limit}&offset=${offset}`;
-    
-    if (status) {
-      endpoint += `&status=${status}`;
-    }
-    if (assigneeId) {
-      endpoint += `&assigneeId=${assigneeId}`;
-    }
+    const { status, assigneeId } = params;
+    const endpoint = `/rest/tasks?${buildQuery(
+      params,
+      status && `status[eq]:${status}`,
+      assigneeId && `assigneeId[eq]:${assigneeId}`
+    )}`;
 
     const result = await this.makeRequest(endpoint);
     return {
@@ -778,7 +814,11 @@ class TwentyCRMServer {
 
     for (const objectType of objectTypes) {
       try {
-        const endpoint = `/rest/${objectType}?search=${encodeURIComponent(query)}&limit=${limit}`;
+        const fields = SEARCH_FIELDS[objectType] || ["name"];
+        const endpoint = `/rest/${objectType}?${buildQuery(
+          { limit },
+          searchToFilter(query, fields)
+        )}`;
         results[objectType] = await this.makeRequest(endpoint);
       } catch (error) {
         results[objectType] = { error: error.message };
@@ -800,6 +840,30 @@ class TwentyCRMServer {
     await this.server.connect(transport);
     console.error("Twenty CRM MCP server running on stdio");
   }
+}
+
+// node index.js --selftest  — verifies filter/query assembly without hitting the API.
+if (process.argv.includes("--selftest")) {
+  const assert = await import("node:assert/strict").then((m) => m.default);
+  assert.equal(
+    searchToFilter("rui", SEARCH_FIELDS.people),
+    "or(name.firstName[ilike]:%rui%,name.lastName[ilike]:%rui%,emails.primaryEmail[ilike]:%rui%)"
+  );
+  assert.equal(searchToFilter("acme", SEARCH_FIELDS.notes), "title[ilike]:%acme%");
+  assert.equal(buildQuery(), "limit=20");
+  assert.equal(
+    buildQuery({ limit: 5, filter: "createdAt[gte]:2026-01-01", orderBy: "createdAt[DescNullsLast]", startingAfter: "abc" }),
+    "limit=5&filter=createdAt%5Bgte%5D%3A2026-01-01&order_by=createdAt%5BDescNullsLast%5D&starting_after=abc"
+  );
+  // search + companyId AND-joined, raw filter appended last
+  assert.equal(
+    decodeURIComponent(buildQuery({ filter: "createdAt[gte]:2026-01-01" }, "name.firstName[ilike]:%x%", "companyId[eq]:c1").split("filter=")[1]),
+    "name.firstName[ilike]:%x%,companyId[eq]:c1,createdAt[gte]:2026-01-01"
+  );
+  // falsy AND-parts dropped
+  assert.equal(buildQuery({}, undefined, false), "limit=20");
+  console.log("selftest ok");
+  process.exit(0);
 }
 
 const server = new TwentyCRMServer();
