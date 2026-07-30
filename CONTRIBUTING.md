@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing! This project aims to provide the best possible integration between Twenty CRM and MCP-compatible AI assistants.
 
+## Maintenance status
+
+This project is **community-supported**. The maintainer no longer runs Twenty day-to-day, so real-world reports and PRs from active Twenty users are especially valuable — you are the ones who see API changes first. Well-tested PRs get reviewed and merged; if you rely on this server heavily and want to help maintain it, open an issue and say so.
+
 ## Development Setup
 
 1. **Fork and clone the repository**:
@@ -15,16 +19,16 @@ cd twenty-crm-mcp-server
 npm install
 ```
 
-3. **Set up environment variables**:
-```bash
-cp .env.example .env
-```
-Edit `.env` with your Twenty CRM API key and base URL.
-
-4. **Test your setup**:
+3. **Run the tests** (no API key or network needed):
 ```bash
 npm test
 ```
+
+4. **To run against a real workspace**, set up environment variables:
+```bash
+cp .env.example .env
+```
+Edit `.env` with your Twenty CRM API key and base URL, then `npm start`.
 
 ## How to Contribute
 
@@ -71,9 +75,9 @@ We welcome feature suggestions! Please:
 - Log errors with appropriate context
 
 **Testing**:
-- Add tests for new functionality
+- Add unit tests for new functionality (`test/` — they run with `node --test`, no network)
 - Ensure existing tests pass
-- Test with both cloud and self-hosted Twenty instances
+- Verify behavior against a real Twenty instance when you can, and say in the PR which Twenty version you tested against — the REST API changes between versions (e.g. `annualRecurringRevenue` → `annualRevenue` in v2.x)
 
 #### Pull Request Process
 
@@ -90,7 +94,6 @@ git checkout -b feature/your-feature-name
 3. **Test thoroughly**:
 ```bash
 npm test
-npm run lint
 ```
 
 4. **Commit with clear messages**:
@@ -118,23 +121,20 @@ Then create a pull request with:
 
 #### Review Process
 
-- All PRs require at least one approval
-- Maintainers will review within 48 hours
+- PRs are reviewed on a best-effort basis (see maintenance status above)
+- CI must pass (`npm test` on Node 18/20/22)
 - Address feedback promptly
 - Keep PRs focused and reasonably sized
 
 ## Roadmap
 
-### Planned Features
+### Ideas for future work
 
-- **Bulk Operations**: Import/export large datasets
-- **Advanced Filtering**: Complex query capabilities
-- **Webhook Support**: Real-time notifications
-- **Data Enrichment**: Integration with external data sources
-- **Workflow Triggers**: Automated actions based on events
-- **Performance Optimization**: Caching and rate limiting
-- **TypeScript Support**: Full type definitions
-- **Additional Object Types**: Support for opportunities, custom objects
+- **Generic custom-object tools**: CRUD for any object discovered via metadata
+- **Schema-aware field normalization**: map composite fields by type from `/rest/metadata/objects` instead of by hardcoded name
+- **Streamable HTTP transport**: optional remote-hosting entrypoint alongside stdio
+- **Upserts / duplicate detection**: via Twenty's `/rest/*/duplicates` endpoint
+- **TypeScript Support**: full type definitions
 
 ### Areas for Contribution
 

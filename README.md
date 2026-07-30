@@ -183,7 +183,7 @@ v2.0.0 fixes writes and search against the actual Twenty API. Breaking changes:
 
 ## 🤝 Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
+This project is **community-supported** — the maintainer no longer runs Twenty day-to-day, so bug reports and PRs from active Twenty users are especially welcome and get reviewed and merged. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 v2.0.0 builds on excellent community work: composite-field mapping ([#4](https://github.com/mhenry3164/twenty-crm-mcp-server/pull/4) by @zaks), filter-based search ([#6](https://github.com/mhenry3164/twenty-crm-mcp-server/pull/6) by @studio7A, [#8](https://github.com/mhenry3164/twenty-crm-mcp-server/pull/8) by @InDebted-Growth), opportunity tools ([#7](https://github.com/mhenry3164/twenty-crm-mcp-server/pull/7) by @tarikhennen), and patterns from the forks by @BCJonkhout, @archie1492, @ndrkltsk and @atilladeniz.
 
