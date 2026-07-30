@@ -1,23 +1,34 @@
 {
   "name": "twenty-crm-mcp-server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A Model Context Protocol (MCP) server for Twenty CRM integration. Enables natural language interactions with your CRM data through Claude and other AI assistants.",
   "type": "module",
   "main": "index.js",
+  "bin": {
+    "twenty-crm-mcp-server": "index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node index.js",
     "dev": "node --inspect index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.6.0"
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "engines": {
     "node": ">=18"
   },
   "keywords": [
     "mcp",
+    "mcp-server",
+    "model-context-protocol",
     "twenty",
+    "twenty-crm",
     "crm",
     "server",
     "claude",

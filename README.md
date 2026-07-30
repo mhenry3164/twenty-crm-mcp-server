@@ -4,6 +4,7 @@
 
 **Transform your CRM into an AI-powered assistant**
 
+[![CI](https://github.com/mhenry3164/twenty-crm-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/mhenry3164/twenty-crm-mcp-server/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
 [![Twenty CRM](https://img.shields.io/badge/Twenty_CRM-Compatible-blue)](https://twenty.com)
@@ -11,7 +12,7 @@
 
 *A Model Context Protocol server that connects [Twenty CRM](https://twenty.com) with Claude and other AI assistants, enabling natural language interactions with your customer data.*
 
-[🚀 Quick Start](#-installation) • [📖 Usage Examples](#-usage) • [🛠️ API Reference](#-api-reference) • [🤝 Contributing](#-contributing)
+[🚀 Quick Start](#-installation) • [🛠️ Tools](#%EF%B8%8F-tools) • [🔍 Search & Filtering](#-search-filtering--pagination) • [🐳 Docker](#-docker) • [🤝 Contributing](#-contributing)
 
 </div>
 
@@ -19,36 +20,14 @@
 
 ## ✨ Features
 
-<table>
-<tr>
-<td width="50%">
-
-### 🔄 **Complete CRUD Operations**
-Create, read, update, and delete people, companies, tasks, and notes with simple commands
-
-### 🧠 **Dynamic Schema Discovery** 
-Automatically adapts to your Twenty CRM configuration and custom fields
-
-### 🔍 **Advanced Search**
-Search across multiple object types with intelligent filtering and natural language queries
-
-</td>
-<td width="50%">
-
-### 📊 **Metadata Access**
-Retrieve schema information and field definitions dynamically
-
-### 💬 **Natural Language Interface**
-Use conversational commands to manage your CRM data effortlessly
-
-### ⚡ **Real-time Updates**
-All changes sync immediately with your Twenty CRM instance
-
-</td>
-</tr>
-</table>
-
----
+- **Complete CRUD** for people, companies, **opportunities**, notes and tasks
+- **Working search** — built on Twenty's real `filter` grammar (`ilike` matching), not the nonexistent `search` param
+- **Correct composite-field mapping** — flat inputs like `firstName`/`email`/`amount` are converted to Twenty's `name`/`emails`/`amount` composite shapes on write
+- **Cursor pagination** (`startingAfter`/`endingBefore`) plus raw `filter`, `orderBy` and `depth` passthrough on every list tool
+- **Notes & tasks attach to records** — pass `personId`/`companyId`/`opportunityId` when creating and the target links are created for you
+- **Batch creates** — up to 60 people or companies per call
+- **Resilient client** — 30s timeouts, automatic retry with backoff on 429/5xx (honors `Retry-After`), structured error messages
+- **Schema discovery** — metadata tools expose your workspace's objects, fields and enum options, including custom objects
 
 ## 🚀 Installation
 
@@ -56,36 +35,22 @@ All changes sync immediately with your Twenty CRM instance
 
 - Node.js 18 or higher
 - A Twenty CRM instance (cloud or self-hosted)
-- Claude Desktop or compatible MCP client
+- Claude Desktop, Claude Code, or any MCP-compatible client
 
 ### Setup
 
-1. **Clone the repository**:
-```bash
-git clone https://github.com/mhenry3164/twenty-crm-mcp-server.git
-cd twenty-crm-mcp-server
-```
+1. **Get your Twenty CRM API key**: in Twenty, go to Settings → API & Webhooks (under Developers) and generate a key.
 
-2. **Install dependencies**:
-```bash
-npm install
-```
+2. **Configure your MCP client.**
 
-3. **Get your Twenty CRM API key**:
-   - Log in to your Twenty CRM workspace
-   - Navigate to Settings → API & Webhooks (under Developers)
-   - Generate a new API key
-
-4. **Configure Claude Desktop**:
-
-Add the server to your `claude_desktop_config.json`:
+**Claude Desktop** (`claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
     "twenty-crm": {
-      "command": "node",
-      "args": ["/path/to/twenty-crm-mcp-server/index.js"],
+      "command": "npx",
+      "args": ["-y", "github:mhenry3164/twenty-crm-mcp-server"],
       "env": {
         "TWENTY_API_KEY": "your_api_key_here",
         "TWENTY_BASE_URL": "https://api.twenty.com"
@@ -95,187 +60,133 @@ Add the server to your `claude_desktop_config.json`:
 }
 ```
 
-For self-hosted Twenty instances, change `TWENTY_BASE_URL` to your domain.
+**Claude Code**:
 
-5. **Restart Claude Desktop** to load the new server.
-
----
-
-## 💬 Usage
-
-Once configured, you can use natural language to interact with your Twenty CRM:
-
-### 👥 People Management
-```
-"List the first 10 people in my CRM"
-"Create a new person named John Doe with email john@example.com"
-"Update Sarah's job title to Senior Developer"
-"Find all people working at tech companies"
+```bash
+claude mcp add twenty-crm -e TWENTY_API_KEY=your_api_key_here -e TWENTY_BASE_URL=https://api.twenty.com -- npx -y github:mhenry3164/twenty-crm-mcp-server
 ```
 
-### 🏢 Company Management
-```
-"Show me all companies with more than 100 employees"
-"Create a company called Tech Solutions with domain techsolutions.com"
-"Update Acme Corp's annual revenue to $5M"
-```
+Or clone and run from source:
 
-### ✅ Task Management
-```
-"Create a task to follow up with John next Friday"
-"Show me all overdue tasks"
-"Mark the task 'Call client' as completed"
-```
-
-### 📝 Notes & Search
-```
-"Add a note about my meeting with the client today"
-"Search for any records mentioning 'blockchain'"
-"Find all contacts without LinkedIn profiles"
-```
-
----
-
-## 🛠️ API Reference
-
-The server provides the following tools:
-
-<details>
-<summary><strong>👥 People Operations</strong></summary>
-
-- `create_person` - Create a new person
-- `get_person` - Get person details by ID
-- `update_person` - Update person information
-- `list_people` - List people with filtering
-- `delete_person` - Delete a person
-
-</details>
-
-<details>
-<summary><strong>🏢 Company Operations</strong></summary>
-
-- `create_company` - Create a new company
-- `get_company` - Get company details by ID
-- `update_company` - Update company information
-- `list_companies` - List companies with filtering
-- `delete_company` - Delete a company
-
-</details>
-
-<details>
-<summary><strong>✅ Task Operations</strong></summary>
-
-- `create_task` - Create a new task
-- `get_task` - Get task details by ID
-- `update_task` - Update task information
-- `list_tasks` - List tasks with filtering
-- `delete_task` - Delete a task
-
-</details>
-
-<details>
-<summary><strong>📝 Note Operations</strong></summary>
-
-- `create_note` - Create a new note
-- `get_note` - Get note details by ID
-- `update_note` - Update note information
-- `list_notes` - List notes with filtering
-- `delete_note` - Delete a note
-
-</details>
-
-<details>
-<summary><strong>🔍 Metadata & Search</strong></summary>
-
-- `get_metadata_objects` - Get all object types and schemas
-- `get_object_metadata` - Get metadata for specific object
-- `search_records` - Search across multiple object types
-
-</details>
-
----
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-- `TWENTY_API_KEY` (required): Your Twenty CRM API key
-- `TWENTY_BASE_URL` (optional): Twenty CRM base URL (defaults to `https://api.twenty.com`)
-
-### Custom Fields
-
-The server automatically discovers and supports custom fields in your Twenty CRM instance. No configuration changes needed when you add new fields.
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Development
-
-1. **Clone the repo**:
 ```bash
 git clone https://github.com/mhenry3164/twenty-crm-mcp-server.git
 cd twenty-crm-mcp-server
-```
-
-2. **Install dependencies**:
-```bash
 npm install
 ```
 
-3. **Set up environment variables**:
-```bash
-cp .env.example .env
-# Edit .env with your API key
+then point your client at `node /path/to/twenty-crm-mcp-server/index.js`.
+
+### Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `TWENTY_API_KEY` | ✅ | — | API key from Settings → API & Webhooks |
+| `TWENTY_BASE_URL` | | `https://api.twenty.com` | Your instance URL if self-hosted |
+| `TWENTY_DEFAULT_CURRENCY` | | `USD` | Currency code used when none is given for money fields |
+
+## 💬 Usage
+
+Once configured, use natural language to interact with your Twenty CRM:
+
+```
+"List the first 10 people in my CRM"
+"Create a new person named John Doe with email john@example.com at Acme (company id ...)"
+"Create a $12,000 opportunity called 'Acme renewal' in PROPOSAL stage"
+"Add a note about today's call and attach it to the Acme company record"
+"Create a follow-up task due Friday assigned to Sam, linked to the deal"
+"Search people, companies and opportunities for 'blockchain'"
 ```
 
-4. **Test the server**:
+## 🛠️ Tools
+
+| Category | Tools |
+|---|---|
+| **People** | `create_person`, `get_person`, `update_person`, `list_people`, `delete_person` |
+| **Companies** | `create_company`, `get_company`, `update_company`, `list_companies`, `delete_company` |
+| **Opportunities** | `create_opportunity`, `get_opportunity`, `update_opportunity`, `list_opportunities`, `delete_opportunity` |
+| **Notes** | `create_note` (with record targets), `get_note`, `update_note`, `list_notes`, `delete_note` |
+| **Tasks** | `create_task` (with record targets + assignee), `get_task`, `update_task`, `list_tasks`, `delete_task` |
+| **Batch** | `batch_create_people`, `batch_create_companies` (up to 60 records) |
+| **Workspace** | `list_workspace_members` (for task assignment) |
+| **Metadata** | `get_metadata_objects`, `get_object_metadata` |
+| **Search** | `search_records` (across people, companies, opportunities, notes, tasks) |
+
+### Composite fields, handled for you
+
+Twenty stores identity/contact/money data in composite fields. This server accepts flat parameters and maps them to the shapes the API expects:
+
+| You pass | Twenty receives |
+|---|---|
+| `firstName`, `lastName` | `name: { firstName, lastName }` |
+| `email` | `emails: { primaryEmail, additionalEmails: [] }` |
+| `phone` | `phones: { primaryPhoneNumber, ... }` |
+| `linkedinUrl` / `xUrl` / `domainName` | `{ primaryLinkUrl, ... }` link composites |
+| `amount: 12000` + `currencyCode` | `amount: { amountMicros: 12000000000, currencyCode }` |
+| `body` (notes/tasks) | `bodyV2: { markdown }` |
+| `address` (string) | `address: { addressStreet1, ... }` (or pass a full address object) |
+
+Anything else — including your workspace's custom fields — passes through untouched.
+
+> **Note on company revenue:** the field is `annualRecurringRevenue` on most deployed Twenty versions and `annualRevenue` on Twenty v2.x+. Both parameters are supported; use the one that matches your instance (check `get_object_metadata` for `companies` if unsure).
+
+## 🔍 Search, filtering & pagination
+
+Twenty's REST API has no `search` or `offset` query params — this server builds real filters instead:
+
+- **`search`** on list tools becomes a case-insensitive `ilike` filter across sensible fields per object (people: first/last name + email; companies: name + domain; opportunities/notes/tasks: name/title).
+- **`filter`** accepts Twenty's raw filter grammar for anything more specific:
+  - `createdAt[gte]:2026-01-01`
+  - `or(city[eq]:Austin,city[eq]:Dallas)`
+  - `emails.primaryEmail[ilike]:%@acme.com`
+  - Comparators: `eq, neq, in, containsAny, is, gt, gte, lt, lte, startsWith, endsWith, like, ilike`; combine with `and(...)`, `or(...)`, `not(...)`. Use `field[is]:NULL` / `NOT_NULL` for empty checks.
+- **`orderBy`**: e.g. `createdAt[DescNullsLast]` (directions: `AscNullsFirst`, `AscNullsLast`, `DescNullsFirst`, `DescNullsLast`).
+- **Pagination is cursor-based**: results include `pageInfo.endCursor` — pass it as `startingAfter` for the next page. `limit` max is 200.
+- **`depth`**: `0` (default) or `1` to include first-level related records.
+
+## 🐳 Docker
+
 ```bash
-npm test
+docker build -t twenty-crm-mcp-server .
 ```
 
----
+```json
+{
+  "mcpServers": {
+    "twenty-crm": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "TWENTY_API_KEY", "-e", "TWENTY_BASE_URL", "twenty-crm-mcp-server"],
+      "env": {
+        "TWENTY_API_KEY": "your_api_key_here",
+        "TWENTY_BASE_URL": "https://api.twenty.com"
+      }
+    }
+  }
+}
+```
 
-## 🐛 Troubleshooting
+## 🧪 Development
 
-### Common Issues
+```bash
+npm install
+npm test        # unit tests (node --test, no network needed)
+npm start       # run the stdio server
+```
 
-**Authentication Error**: Verify your API key is correct and has appropriate permissions.
+## ⬆️ Upgrading from v1.x
 
-**Connection Failed**: Check that your `TWENTY_BASE_URL` is correct (especially for self-hosted instances).
+v2.0.0 fixes writes and search against the actual Twenty API. Breaking changes:
 
-**Field Not Found**: The server automatically discovers fields. If you're getting field errors, try getting the metadata first: *"Show me the available fields for people"*
+- `offset` was removed from list tools (Twenty's REST API never supported it) — use cursor pagination (`startingAfter`).
+- Note/task `body` now maps to `bodyV2.markdown`; `position` params were dropped.
+- Updates now use `PATCH` (Twenty's documented verb) instead of `PUT`.
+- List results are returned as `{ records, pageInfo, totalCount? }` instead of the raw API envelope.
 
----
+## 🤝 Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+v2.0.0 builds on excellent community work: composite-field mapping ([#4](https://github.com/mhenry3164/twenty-crm-mcp-server/pull/4) by @zaks), filter-based search ([#6](https://github.com/mhenry3164/twenty-crm-mcp-server/pull/6) by @studio7A, [#8](https://github.com/mhenry3164/twenty-crm-mcp-server/pull/8) by @InDebted-Growth), opportunity tools ([#7](https://github.com/mhenry3164/twenty-crm-mcp-server/pull/7) by @tarikhennen), and patterns from the forks by @BCJonkhout, @archie1492, @ndrkltsk and @atilladeniz.
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- [Twenty CRM](https://twenty.com) for providing an excellent open-source CRM
-- [Anthropic](https://anthropic.com) for the Model Context Protocol
-- The MCP community for inspiration and examples
-
----
-
-## 🔗 Links
-
-- [Twenty CRM Documentation](https://twenty.com/developers)
-- [Model Context Protocol Specification](https://modelcontextprotocol.io/)
-- [Claude Desktop](https://claude.ai/desktop)
-
----
-
-<div align="center">
-
-**Made with ❤️ for the open-source community**
-
-*⭐ Star this repo if you find it helpful!*
-
-</div>
+MIT — see [LICENSE](LICENSE).
